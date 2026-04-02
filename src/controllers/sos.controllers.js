@@ -1,20 +1,48 @@
-import redisClient from "../config/redis.js";
-import { getIO } from "../config/socket.js";
+import SOS from "../models/sos.model.js";
+import redis from "../config/redis.js";
 
 export const triggerSOS = async (req, res) => {
-  const { userId, message } = req.body;
+  try {
+    const { phone, lat, lng, timestamp } = req.body;
 
-  // Cache SOS
-  await redisClient.set(`sos:${userId}`, JSON.stringify({
-    active: true,
-    message
-  }));
+    if (!phone || !lat || !lng) {
+      return res.status(400).json({
+        error: "phone, lat and lng are required"
+      });
+    }
 
-  // Emit real-time event
-  const io = getIO();
-  io.to(userId).emit("SOS", {
-    message
-  });
+    // 🔹 1. Save to MongoDB (MAIN STORAGE)
+    const sosEvent = new SOS({
+      phone,
+      lat,
+      lng,
+      timestamp
+    });
 
-  res.json({ success: true });
+    await sosEvent.save();
+
+    // 🔹 2. Push to Redis queue (for worker)
+    await redis.lPush(
+      "sos_queue",
+      JSON.stringify({
+        id: sosEvent._id,
+        phone,
+        lat,
+        lng
+      })
+    );
+
+    console.log("🚨 SOS stored + queued:", sosEvent._id);
+
+    res.json({
+      status: "SOS triggered successfully",
+      sosId: sosEvent._id
+    });
+
+  } catch (error) {
+    console.error("SOS error:", error);
+    res.status(500).json({
+      error: "Failed to trigger SOS"
+    });
+  }
 };

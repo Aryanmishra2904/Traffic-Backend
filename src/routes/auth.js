@@ -1,69 +1,111 @@
 import express from "express";
-import redis from "../redisClient.js";
+import redis from "../config/redis.js";
+import User from "../models/user.js";
 
 const router = express.Router();
 
-// SIGNUP
+
+// ===================== SIGNUP =====================
 router.post("/signup", async (req, res) => {
     try {
         const { name, phone, email } = req.body;
 
-        if (!phone || !name) {
-            return res.status(400).json({ error: "Name and phone required" });
+        if (!name || !phone) {
+            return res.status(400).json({
+                error: "Name and phone required"
+            });
         }
 
-        const userKey = `user:${phone}`;
+        // 🔹 Check in MongoDB
+        const existingUser = await User.findOne({ phone });
 
-        const existing = await redis.get(userKey);
-        if (existing) {
-            return res.status(400).json({ error: "User already exists" });
+        if (existingUser) {
+            return res.status(400).json({
+                error: "User already exists"
+            });
         }
 
-        const userData = {
+        // 🔹 Save to MongoDB
+        const newUser = new User({
             name,
             phone,
             email
-        };
+        });
 
-        await redis.set(userKey, JSON.stringify(userData));
+        await newUser.save();
+        console.log("✅ Saved to MongoDB:", newUser);
+
+        // 🔹 Cache in Redis
+        await redis.set(
+            `user:${phone}`,
+            JSON.stringify(newUser)
+        );
 
         res.json({
             status: "signup successful",
-            user: userData
+            user: newUser
         });
 
     } catch (err) {
-        res.status(500).json({ error: "Server error" });
+        console.error("Signup error:", err);
+        res.status(500).json({
+            error: "Server error"
+        });
     }
 });
 
-// LOGIN
+
+// ===================== LOGIN =====================
 router.post("/login", async (req, res) => {
     try {
         const { phone } = req.body;
 
         if (!phone) {
-            return res.status(400).json({ error: "Phone required" });
+            return res.status(400).json({
+                error: "Phone required"
+            });
         }
 
-        const userKey = `user:${phone}`;
-        const user = await redis.get(userKey);
+        // 🔹 Try Redis first
+        let user = await redis.get(`user:${phone}`);
+
+        if (user) {
+            return res.json({
+                status: "login success (cache)",
+                user: JSON.parse(user)
+            });
+        }
+
+        // 🔹 Fallback to MongoDB
+        user = await User.findOne({ phone });
 
         if (!user) {
-            return res.status(404).json({ error: "User not found" });
+            return res.status(404).json({
+                error: "User not found"
+            });
         }
+
+        // 🔹 Cache again
+        await redis.set(
+            `user:${phone}`,
+            JSON.stringify(user)
+        );
 
         res.json({
             status: "login successful",
-            user: JSON.parse(user)
+            user
         });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+        console.error("Login error:", err);
+        res.status(500).json({
+            error: "Server error"
+        });
     }
 });
 
+
+// ===================== SAVE CONTACTS =====================
 router.post("/contacts", async (req, res) => {
     try {
         const { phone, contacts } = req.body;
@@ -74,26 +116,23 @@ router.post("/contacts", async (req, res) => {
             });
         }
 
-        const userKey = `user:${phone}`;
-
-        const user = await redis.get(userKey);
+        // 🔹 Check user exists
+        const user = await User.findOne({ phone });
 
         if (!user) {
-            return res.status(404).json({ error: "User not found" });
+            return res.status(404).json({
+                error: "User not found"
+            });
         }
 
-        const parsedUser = JSON.parse(user);
+        // 🔹 Save contacts in MongoDB
+        user.contacts = contacts;
+        await user.save();
 
-        // Save contacts separately
+        // 🔹 Cache contacts in Redis
         await redis.set(
             `contacts:${phone}`,
             JSON.stringify(contacts)
-        );
-
-        // OPTIONAL: queue contacts (for async processing/logging)
-        await redis.lPush(
-            "contacts_queue",
-            JSON.stringify({ phone, contacts })
         );
 
         res.json({
@@ -102,19 +141,54 @@ router.post("/contacts", async (req, res) => {
         });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+        console.error("Contacts error:", err);
+        res.status(500).json({
+            error: "Server error"
+        });
     }
 });
 
+
+// ===================== GET CONTACTS =====================
 router.get("/contacts/:phone", async (req, res) => {
-    const { phone } = req.params;
+    try {
+        const { phone } = req.params;
 
-    const contacts = await redis.get(`contacts:${phone}`);
+        // 🔹 Try Redis first
+        let contacts = await redis.get(`contacts:${phone}`);
 
-    res.json({
-        contacts: contacts ? JSON.parse(contacts) : []
-    });
+        if (contacts) {
+            return res.json({
+                contacts: JSON.parse(contacts)
+            });
+        }
+
+        // 🔹 Fallback to MongoDB
+        const user = await User.findOne({ phone });
+
+        if (!user || !user.contacts) {
+            return res.json({
+                contacts: []
+            });
+        }
+
+        // 🔹 Cache again
+        await redis.set(
+            `contacts:${phone}`,
+            JSON.stringify(user.contacts)
+        );
+
+        res.json({
+            contacts: user.contacts
+        });
+
+    } catch (err) {
+        console.error("Get contacts error:", err);
+        res.status(500).json({
+            error: "Server error"
+        });
+    }
 });
+
 
 export default router;
