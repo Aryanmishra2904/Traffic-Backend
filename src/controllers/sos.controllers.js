@@ -7,11 +7,19 @@ export const triggerSOS = async (req, res) => {
     try {
         console.log("\n🚨 [SOS TRIGGER] HIT:", req.body);
 
-        const { phone, severity, reasons } = req.body;
+        // ✅ FIXED: include userId
+        const { phone, userId, severity, reasons } = req.body;
 
+        // 🔒 Validation
         if (!phone) {
             return res.status(400).json({ error: "Phone is required" });
         }
+
+        if (!userId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+
+        console.log("DEBUG userId:", userId);
 
         // 🔥 Normalize phone
         const cleanPhone = phone.replace("+91", "");
@@ -55,13 +63,12 @@ export const triggerSOS = async (req, res) => {
             if (severity >= 70) severityLevel = "SEVERE";
             else if (severity >= 40) severityLevel = "MEDIUM";
         } else if (typeof severity === "string") {
-            // if already string, trust it
             severityLevel = severity;
         }
 
         console.log("⚡ Final severity:", severityLevel);
 
-        // 🔹 Save SOS
+        // 🔹 Save SOS in DB
         const sosEvent = await SOS.create({
             phone,
             lat,
@@ -73,23 +80,25 @@ export const triggerSOS = async (req, res) => {
 
         console.log("✅ SOS saved:", sosEvent._id);
 
-        // 🔹 Push to queue
-        await redis.lPush(
-            "sos_queue",
-            JSON.stringify({
-                id: sosEvent._id.toString(),
-                phone,
-                lat,
-                lng,
-                status: "triggered",
-                severity: severityLevel
-            })
-        );
+        // 🔹 Push to Redis queue
+        const queuePayload = {
+            id: sosEvent._id.toString(),
+            userId: userId,   // ✅ FIXED
+            phone,
+            lat,
+            lng,
+            status: "triggered",
+            severity: severityLevel
+        };
 
-        console.log("📦 Pushed to queue");
+        await redis.lPush("sos_queue", JSON.stringify(queuePayload));
 
+        console.log("📦 Pushed to queue:", queuePayload);
+
+        // 🔹 Response
         res.json({
             success: true,
+            message: "SOS triggered successfully",
             id: sosEvent._id,
             location: { lat, lng },
             severity: severityLevel
@@ -107,7 +116,7 @@ export const getSOSStatus = async (req, res) => {
 
         console.log("\n📊 [SOS STATUS] Request for:", id);
 
-        // 🔥 Prevent crash
+        // 🔥 Prevent invalid ObjectId crash
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
                 error: "Invalid SOS ID"

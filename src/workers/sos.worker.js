@@ -1,6 +1,5 @@
 import connectDB from "../config/db.js";
 import redis from "../config/redis.js";
-import { sendSMS } from "../service/notification.service.js";
 import SOS from "../models/sos.model.js";
 
 // 🚀 Initialize Worker
@@ -8,7 +7,6 @@ async function init() {
     try {
         console.log("🚀 SOS Worker starting...");
 
-        // 🔥 Connect MongoDB
         await connectDB();
         console.log("✅ MongoDB connected in worker");
 
@@ -20,14 +18,13 @@ async function init() {
     }
 }
 
-// 🔁 Main Worker Loop
+// 🔁 Worker Loop
 async function startWorker() {
     console.log("🚀 SOS Worker started...");
 
     while (true) {
         try {
             const data = await redis.brPop("sos_queue", 0);
-
             if (!data) continue;
 
             const event = JSON.parse(data.element);
@@ -42,63 +39,80 @@ async function startWorker() {
     }
 }
 
-// 🧠 Handle SOS Logic
+// 🧠 SOS Handler
 async function handleSOS(event) {
-    const { id, phone, lat, lng } = event;
+    const { id, userId, phone, lat, lng, severity } = event;
 
     try {
         console.log("🔄 Processing SOS ID:", id);
 
-        // 🔹 Ensure SOS exists (upsert = create if not exists)
-        await SOS.findByIdAndUpdate(
-            id,
-            {
-                phone,
-                lat,
-                lng,
-                status: "processing",
-                updatedAt: new Date()
-            },
-            { upsert: true, new: true }
-        );
+        if (!userId) {
+            console.log("❌ Missing userId in event");
+            return;
+        }
 
-        // 🔹 Fetch data from Redis
-        const contactsData = await redis.get(`contacts:${phone}`);
-        const contacts = contactsData ? JSON.parse(contactsData) : [];
+        await SOS.findByIdAndUpdate(id, {
+            status: "processing",
+            updatedAt: new Date()
+        });
 
-        const hospitalsData = await redis.get("hospitals");
-        const hospitals = hospitalsData ? JSON.parse(hospitalsData) : [];
+        // 🔥 Fetch user
+        const userData = await redis.get(`user:${userId}`);
 
-        const policeData = await redis.get("police");
-        const police = policeData ? JSON.parse(policeData) : [];
+        if (!userData) {
+            console.log("❌ User not found in Redis:", userId);
+            return;
+        }
+
+        const user = JSON.parse(userData);
+        const contacts = user.contacts || [];
 
         console.log("📞 Contacts:", contacts.length);
-        console.log("🏥 Hospitals:", hospitals.length);
-        console.log("🚓 Police:", police.length);
 
-        const message = buildMessage(phone, lat, lng);
+        if (contacts.length === 0) {
+            console.log("❌ No contacts available");
+            return;
+        }
+
+        const message = buildMessage(phone, lat, lng, severity);
 
         let allSuccess = true;
 
-        // 🔹 Send SMS to contacts
+        // 🔥 SIMULATED SMS FUNCTION
+        const simulateSMS = async (phone, message) => {
+            const time = new Date().toLocaleString();
+
+            console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📩 EMERGENCY ALERT DISPATCHED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📞 To   : ${phone}
+🕒 Time : ${time}
+📍 Message:
+${message}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            `);
+
+            // simulate delay
+            await new Promise((res) => setTimeout(res, 300));
+
+            return true;
+        };
+
+        // 🔥 Send to contacts
         for (let c of contacts) {
-            const success = await sendSMS(c.phone, message);
-            if (!success) allSuccess = false;
+            const cleanNumber = c.phone.replace("+91", "");
+
+            console.log("📩 Sending SMS to:", cleanNumber);
+
+            const success = await simulateSMS(cleanNumber, message);
+
+            if (!success) {
+                console.log("❌ SMS failed:", cleanNumber);
+                allSuccess = false;
+            }
         }
 
-        // 🔹 Send SMS to hospitals
-        for (let h of hospitals) {
-            const success = await sendSMS(h.phone, message);
-            if (!success) allSuccess = false;
-        }
-
-        // 🔹 Send SMS to police
-        for (let p of police) {
-            const success = await sendSMS(p.phone, message);
-            if (!success) allSuccess = false;
-        }
-
-        // 🔹 Final Status Update
         if (allSuccess) {
             console.log("✅ All alerts sent");
 
@@ -108,37 +122,39 @@ async function handleSOS(event) {
             });
 
         } else {
-            console.log("❌ Some alerts failed → pushing to retry");
+            console.log("❌ Some alerts failed → retry");
 
             await SOS.findByIdAndUpdate(id, {
                 status: "failed"
             });
 
-            // 🔁 Push to retry queue
             await redis.lPush("retry_queue", JSON.stringify(event));
         }
 
     } catch (err) {
         console.error("❌ Error handling SOS:", err);
-
-        // 🔁 Backup retry on crash
         await redis.lPush("retry_queue", JSON.stringify(event));
     }
 }
 
 // 📨 Message Builder
-function buildMessage(phone, lat, lng) {
+function buildMessage(phone, lat, lng, severity) {
     return `
 🚨 ACCIDENT ALERT 🚨
 
 User: ${phone}
+Severity: ${severity}
 
-📍 Location:
+📍 Coordinates:
+Latitude : ${lat}
+Longitude: ${lng}
+
+🗺️ Map:
 https://maps.google.com/?q=${lat},${lng}
 
 Immediate help required.
 `;
 }
 
-// 🔥 Start Worker
+// 🚀 Start
 init();
