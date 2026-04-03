@@ -4,6 +4,8 @@ import { triggerSOS, getSOSStatus } from "../controllers/sos.controllers.js";
 const router = express.Router();
 
 router.post("/trigger", triggerSOS);
-router.get("/:id", getSOSStatus);
+
+// ✅ make it explicit
+router.get("/status/:id", getSOSStatus);
 
 export default router;

@@ -1,19 +1,25 @@
 import mongoose from "mongoose";
 
-const sosSchema = new mongoose.Schema(
-  {
-    phone: { type: String, required: true },
-    lat: { type: Number, required: true },
-    lng: { type: Number, required: true },
-    timestamp: { type: Number }, // from client
-    status: {
-      type: String,
-      enum: ["triggered", "processed"],
-      default: "triggered"
-    },
-    snapshotUrl: { type: String }, // optional (image/video)
-  },
-  { timestamps: true } // adds createdAt, updatedAt
-);
+const sosSchema = new mongoose.Schema({
+    phone: String,
+    lat: Number,
+    lng: Number,
 
-export default mongoose.model("SOS", sosSchema);
+    status: {
+        type: String,
+        enum: ["triggered", "processing", "sent", "failed"],
+        default: "triggered"
+    },
+
+    severity: {
+        type: String,
+        enum: ["LOW", "MEDIUM", "SEVERE"],
+        default: "LOW"
+    },
+
+    reasons: [String]
+});
+
+const SOS = mongoose.model("SOS", sosSchema);
+
+export default SOS; // ✅ THIS IS THE FIX
