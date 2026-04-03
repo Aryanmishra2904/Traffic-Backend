@@ -1,6 +1,14 @@
-export async function sendAlert(phone, message) {
-    console.log(`📩 Sending alert to ${phone}`);
-    console.log(message);
+export const sendSMS = async (phone, message) => {
+    try {
+        console.log("📩 Sending SMS to:", phone);
 
-    // 👉 Later integrate SMS API here (Twilio etc)
-}
+        // 🔴 Replace with real API (Fast2SMS / Twilio)
+        console.log("MESSAGE:", message);
+
+        return true; // simulate success
+
+    } catch (err) {
+        console.error("❌ SMS failed:", err);
+        return false;
+    }
+};
