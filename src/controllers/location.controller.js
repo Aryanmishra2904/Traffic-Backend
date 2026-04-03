@@ -1,4 +1,5 @@
 import redis from "../config/redis.js";
+import Location from "../models/location.model.js"; 
 
 export const updateLocation = async (req, res) => {
     try {
@@ -11,17 +12,24 @@ export const updateLocation = async (req, res) => {
             return res.status(400).json({ error: "Missing data" });
         }
 
-        const locationData = {
-            lat,
-            lng,
-            updatedAt: Date.now()
-        };
+        const locationData = { lat, lng };
 
+        // 🔥 Save latest location in Redis
         await redis.set(`location:${phone}`, JSON.stringify(locationData));
 
-        console.log("✅ Location stored in Redis:", locationData);
+        // 🔥 Save location history in MongoDB
+        await Location.create({
+            phone,
+            lat,
+            lng
+        });
 
-        res.json({ status: "location updated" });
+        console.log("✅ Location stored in Redis + MongoDB");
+
+        res.json({
+            success: true,
+            message: "Location saved successfully"
+        });
 
     } catch (err) {
         console.error("❌ Location error:", err);
