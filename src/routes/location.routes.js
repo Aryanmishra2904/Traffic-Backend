@@ -1,6 +1,7 @@
-console.log("📍 LOCATION ROUTES LOADED");
 import express from "express";
 import { updateLocation } from "../controllers/location.controller.js";
+
+console.log("📍 LOCATION ROUTES LOADED");
 
 const router = express.Router();
 

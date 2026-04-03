@@ -3,6 +3,8 @@ import cors from "cors";
 import authRoutes from "./src/routes/auth.js";
 import connectDB from "./src/config/db.js";
 import sosRoutes from "./src/routes/sos.routes.js";
+console.log("🔥 Importing location routes...");
+import locationRoutes from "./src/routes/location.routes.js";
 
 const app = express();
 
@@ -16,6 +18,7 @@ await connectDB();
 app.use("/api/auth", authRoutes);
 console.log("✅ Mounting /api/sos routes");
 app.use("/api/sos", sosRoutes);
+app.use("/api/location", locationRoutes);
 
 app.listen(8000, "0.0.0.0", () => {
     console.log("Server running on port 8000");
