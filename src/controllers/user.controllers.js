@@ -1,22 +1,26 @@
 import redisClient from "../config/redis.js";
-import { v4 as uuidv4 } from "uuid";
 
 export const setupUser = async (req, res) => {
   try {
-    const { name, contacts } = req.body;
+    const { name, contacts, phone } = req.body;
 
-    const userId = uuidv4();
+    // 🔒 Validation
+    if (!phone || !contacts || contacts.length === 0) {
+      return res.status(400).json({
+        error: "Phone and contacts are required"
+      });
+    }
+
+    const userId = phone; // 🔥 KEY CHANGE
 
     const userData = {
       name,
+      phone,
       contacts
     };
 
-    // Save user
+    // 🔥 Save using phone as key
     await redisClient.set(`user:${userId}`, JSON.stringify(userData));
-
-    // Increment user count
-    await redisClient.incr("users_count");
 
     res.json({
       userId,
