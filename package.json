@@ -2,24 +2,36 @@
   "name": "adasbackend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "keywords": [],
-  "author": "",
+  "homepage": "https://github.com/Aryanmishra2904/Traffic-Backend#readme",
+  "bugs": {
+    "url": "https://github.com/Aryanmishra2904/Traffic-Backend/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aryanmishra2904/Traffic-Backend.git"
+  },
   "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "node server.js",
+    "dev": "nodemon server.js"
+  },
   "dependencies": {
-    "axios": "^1.14.0",
+    "axios": "^1.21.1",
     "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "ioredis": "^5.10.1",
-    "mongoose": "^9.3.3",
-    "redis": "^5.11.0",
-    "socket.io": "^4.8.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.3.0",
+    "ioredis": "^5.11.1",
+    "mongoose": "^9.13.1",
+    "redis": "^5.12.4",
+    "socket.io": "^4.8.4",
     "twilio": "^5.13.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
